@@ -1,6 +1,7 @@
 package factory
 
 type Factory struct {
+	Name      string
 	InputInv  Inventory
 	OutputInv Inventory
 	Recipe    *Recipe

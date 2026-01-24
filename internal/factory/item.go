@@ -20,7 +20,13 @@ func FormatQuantity(q uint64) string {
 		return "0g"
 	}
 	unit := "g"
-	if q >= 1_000_000 {
+	if q >= 1_000_000_000_000 {
+		q /= 1_000_000_000_000
+		unit = "Mt"
+	} else if q >= 1_000_000_000 {
+		q /= 1_000_000_000
+		unit = "kt"
+	} else if q >= 1_000_000 {
 		q /= 1_000_000
 		unit = "t"
 	} else if q >= 1000 {
@@ -138,4 +144,39 @@ var Smelting = &Recipe{
 		Slag:  200_000_000, // 0.2t
 	},
 	Ticks: 100,
+}
+
+type ProcessJSON struct {
+	Name   string      `json:"name"`
+	Stages []StageJSON `json:"stages"`
+}
+
+type StageJSON struct {
+	Name    string   `json:"name"`
+	Stage   int      `json:"stage"`
+	Inputs  []string `json:"inputs"`
+	Outputs []string `json:"outputs"`
+}
+
+const (
+	DefaultQty   uint64 = 1_000_000_000
+	DefaultTicks uint64 = 50
+)
+
+func RecipeFromStage(stage StageJSON) *Recipe {
+	inputs := Inventory{}
+	for _, input := range stage.Inputs {
+		name := strings.TrimSpace(input)
+		inputs[ItemType(name)] = DefaultQty
+	}
+	outputs := Inventory{}
+	for _, output := range stage.Outputs {
+		name := strings.TrimSpace(output)
+		outputs[ItemType(name)] = DefaultQty
+	}
+	return &Recipe{
+		Inputs:  inputs,
+		Outputs: outputs,
+		Ticks:   DefaultTicks,
+	}
 }

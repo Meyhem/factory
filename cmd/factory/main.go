@@ -4,6 +4,7 @@ import (
 	"factory/internal/factory"
 	"flag"
 	"fmt"
+	"os"
 )
 
 func main() {
@@ -11,30 +12,12 @@ func main() {
 	interval := flag.Uint64("interval", 100, "print state every N ticks")
 	flag.Parse()
 
-	mine := &factory.Factory{
-		InputInv:  make(factory.Inventory),
-		OutputInv: make(factory.Inventory),
-		Recipe:    factory.MiningIron,
+	factories, conns, numProcesses, err := factory.LoadFactoriesFromJSON("processes.json")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load processes.json: %v\n", err)
+		os.Exit(1)
 	}
-	coalMine := &factory.Factory{
-		InputInv:  make(factory.Inventory),
-		OutputInv: make(factory.Inventory),
-		Recipe:    factory.MiningCoal,
-	}
-	smelt := &factory.Factory{
-		InputInv:  make(factory.Inventory),
-		OutputInv: make(factory.Inventory),
-		Recipe:    factory.Smelting,
-	}
-
-	conns := []factory.Connection{
-		{From: mine, To: smelt},
-		{From: coalMine, To: smelt},
-	}
-
-	factories := []*factory.Factory{mine, coalMine, smelt}
-
-	fmt.Println("Factory Simulation Started")
+	fmt.Printf("Factory Simulation Started: %d factories in %d processes\n", len(factories), numProcesses)
 
 	for i := uint64(0); i < *ticks; i++ {
 		factory.TickAll(factories, conns)
