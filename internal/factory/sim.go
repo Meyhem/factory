@@ -59,18 +59,22 @@ func PrintAll(factories []*Factory) string {
 			maxOut = len(outStr)
 		}
 	}
-	progWidth := 10
-	header := fmt.Sprintf("%-*s | %-*s | %-*s | %-*s\n",
-		maxName, "Factory",
-		maxIn, "InputInv",
-		maxOut, "OutputInv",
-		progWidth, "Progress")
-	sep := strings.Repeat("-", maxName) + " | " +
-		strings.Repeat("-", maxIn) + " | " +
-		strings.Repeat("-", maxOut) + " | " +
-		strings.Repeat("-", progWidth) + "\n"
-	lineFmt := fmt.Sprintf("%%-%ds | %%-%ds | %%-%ds | %%-%ds\\n",
-		maxName, maxIn, maxOut, progWidth)
+	colWidth := maxName
+	if maxIn > colWidth {
+		colWidth = maxIn
+	}
+	if maxOut > colWidth {
+		colWidth = maxOut
+	}
+	header := fmt.Sprintf("%-*s | %-*s | %-*s\n",
+		colWidth, "Name",
+		colWidth, "Input Inv",
+		colWidth, "Output Inv")
+	sep := strings.Repeat("-", colWidth) + " | " +
+		strings.Repeat("-", colWidth) + " | " +
+		strings.Repeat("-", colWidth) + "\n"
+	lineFmt := fmt.Sprintf("%%-%ds | %%-%ds | %%-%ds\n",
+		colWidth, colWidth, colWidth)
 	out := header + sep
 	for i, f := range factories {
 		name := f.Name
@@ -79,13 +83,7 @@ func PrintAll(factories []*Factory) string {
 		}
 		inStr := f.InputInv.String()
 		outStr := f.OutputInv.String()
-		var prog string
-		if f.Recipe == nil {
-			prog = "-"
-		} else {
-			prog = fmt.Sprintf("%d/%d", f.Progress, f.Recipe.Ticks)
-		}
-		line := fmt.Sprintf(lineFmt, name, inStr, outStr, prog)
+		line := fmt.Sprintf(lineFmt, name, inStr, outStr)
 		out += line
 	}
 	return out
