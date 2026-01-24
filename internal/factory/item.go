@@ -146,37 +146,20 @@ var Smelting = &Recipe{
 	Ticks: 100,
 }
 
-type ProcessJSON struct {
-	Name   string      `json:"name"`
-	Stages []StageJSON `json:"stages"`
-}
-
-type StageJSON struct {
-	Name    string   `json:"name"`
-	Stage   int      `json:"stage"`
-	Inputs  []string `json:"inputs"`
-	Outputs []string `json:"outputs"`
-}
-
 const (
-	DefaultQty   uint64 = 1_000_000_000
-	DefaultTicks uint64 = 50
+	Frames ItemType = "Frames"
+	Sheets ItemType = "Sheets"
+	Rods   ItemType = "Rods"
 )
 
-func RecipeFromStage(stage StageJSON) *Recipe {
-	inputs := Inventory{}
-	for _, input := range stage.Inputs {
-		name := strings.TrimSpace(input)
-		inputs[ItemType(name)] = DefaultQty
-	}
-	outputs := Inventory{}
-	for _, output := range stage.Outputs {
-		name := strings.TrimSpace(output)
-		outputs[ItemType(name)] = DefaultQty
-	}
-	return &Recipe{
-		Inputs:  inputs,
-		Outputs: outputs,
-		Ticks:   DefaultTicks,
-	}
+var SteelProcessing = &Recipe{
+	Inputs: Inventory{
+		Steel: 1_000_000_000, // 1kt steel
+	},
+	Outputs: Inventory{
+		Frames: 300_000_000,
+		Sheets: 300_000_000,
+		Rods:   400_000_000,
+	},
+	Ticks: 80,
 }

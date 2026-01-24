@@ -4,7 +4,6 @@ import (
 	"factory/internal/factory"
 	"flag"
 	"fmt"
-	"os"
 )
 
 func main() {
@@ -12,20 +11,25 @@ func main() {
 	interval := flag.Uint64("interval", 100, "print state every N ticks")
 	flag.Parse()
 
-	factories, conns, numProcesses, err := factory.LoadFactoriesFromJSON("processes.json")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to load processes.json: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("Factory Simulation Started: %d factories in %d processes\n", len(factories), numProcesses)
+	ironMine := factory.NewFactory("Iron Mine", factory.MiningIron)
+	coalMine := factory.NewFactory("Coal Mine", factory.MiningCoal)
+	smelter := factory.NewFactory("Smelter", factory.Smelting)
+	steelProc := factory.NewFactory("Steel Processor", factory.SteelProcessing)
 
-	for i := uint64(0); i < *ticks; i++ {
+	factories := []*factory.Factory{ironMine, coalMine, smelter, steelProc}
+	conns := []factory.Connection{
+		{From: ironMine, To: smelter},
+		{From: coalMine, To: smelter},
+		{From: smelter, To: steelProc},
+	}
+
+	for t := uint64(0); t < *ticks; t++ {
 		factory.TickAll(factories, conns)
-		if (i+1)%*interval == 0 || i == 0 {
-			fmt.Printf("\nTick %d:\n", i+1)
+		if t%*interval == 0 {
+			fmt.Print("\033[2J\033[H")
 			fmt.Print(factory.PrintAll(factories))
+			fmt.Println()
 		}
 	}
-
 	fmt.Println("\nSimulation complete.")
 }
