@@ -13,7 +13,7 @@ class Program
                 var ironRecipe = Recipes.IronSmelting();
 
         var ironFactory = new Factory { CurrentRecipe = ironRecipe, Name = "Iron Smelter", Credits = 5000 };
-        ironFactory.InputInventory = new Inventory(new KeyValuePair<ProductType, double>[] { new(ProductType.IronOre, 20.0) });
+        ironFactory.InputInventory = new Inventory(new Dictionary<ProductType, double> { [ProductType.IronOre] = 20.0 });
         engine.AddFactory(ironFactory);
 
                 var energyRecipe = Recipes.EnergyProduction();
@@ -50,11 +50,5 @@ class Program
                 f.InputInventory.GetAmount(ProductType.Energy),
                 f.OutputInventory.GetAmount(ProductType.IronIngot));
         }
-
-        Console.WriteLine("\nSimulation complete.");
-        Console.WriteLine($"Final tick: {engine.GlobalTick}");
-        Console.WriteLine($"Iron Factory Credits: {ironFactory.Credits:F2}");
-        Console.WriteLine($"Iron Ore left: {ironFactory.InputInventory.GetAmount(ProductType.IronOre):F1}");
-        Console.WriteLine($"Iron Ingots produced: {ironFactory.OutputInventory.GetAmount(ProductType.IronIngot):F1}");
     }
 }
