@@ -5,5 +5,6 @@ public enum ProductType
     IronOre,
     Coal,
     Steel,
-    IronIngot // intermediate?
+    IronIngot, // intermediate?
+    Energy
 }
