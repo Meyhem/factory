@@ -1,3 +1,7 @@
+# Environment
+- Platform: Linux
+- Shell: Bash
+
 # Opencode Agent Commands
 
 ## Build & Verify
