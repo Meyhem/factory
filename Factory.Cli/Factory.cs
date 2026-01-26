@@ -18,6 +18,7 @@ public class Factory
     public Inventory OutputInventory { get; } = new();
     public Inventory ProductionBuffer { get; } = new();
     public double Credits { get; set; } = 1000.0;
+    public string Name { get; set; } = "Unnamed";
 
     public void Tick()
     {

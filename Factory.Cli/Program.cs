@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 namespace Factory.Cli;
 
@@ -9,28 +10,46 @@ class Program
         var market = new Market();
         var engine = new Engine(market);
 
-        // Sample iron smelting recipe: 2 IronOre -> 1 IronIngot in 10 ticks
-        var ironInput = new Inventory();
-        ironInput.Add(ProductType.IronOre, 2.0);
-        ironInput.Add(ProductType.Energy, 5.0);
-        var ironOutput = new Inventory();
-        ironOutput.Add(ProductType.IronIngot, 1.0);
-        var ironRecipe = new Recipe(ironInput, ironOutput, 10);
+                var ironRecipe = Recipes.IronSmelting();
 
-        var ironFactory = new Factory { CurrentRecipe = ironRecipe, Credits = 5000 };
+        var ironFactory = new Factory { CurrentRecipe = ironRecipe, Name = "Iron Smelter", Credits = 5000 };
         ironFactory.InputInventory.Add(ProductType.IronOre, 20.0);
         engine.AddFactory(ironFactory);
 
-        // Energy producer: produces 5 Energy every 5 ticks
-        var energyInput = new Inventory();
-        var energyOutput = new Inventory();
-        energyOutput.Add(ProductType.Energy, 5.0);
-        var energyRecipe = new Recipe(energyInput, energyOutput, 5);
-        var energyFactory = new Factory { CurrentRecipe = energyRecipe, Credits = 5000 };
+                var energyRecipe = Recipes.EnergyProduction();
+        var energyFactory = new Factory { CurrentRecipe = energyRecipe, Name = "Energy Plant", Credits = 5000 };
         engine.AddFactory(energyFactory);
 
         Console.WriteLine("Starting simulation...");
         engine.Run(30);
+
+        Console.WriteLine("\nMarket state:");
+        Console.WriteLine("{0,-12} | {1,6} | {2,7} | {3,7}", "Product", "Price", "Buy Qty", "Sell Qty");
+        Console.WriteLine(new string('-', 12+1+6+1+7+1+7));
+        foreach (ProductType p in Enum.GetValues<ProductType>())
+        {
+            double price = market.CurrentPrices[p];
+            double buyQty = 0;
+            if (market.BuyOrdersByProduct.TryGetValue(p, out var buys))
+                buyQty = buys.Sum(o => o.Quantity);
+            double sellQty = 0;
+            if (market.SellOrdersByProduct.TryGetValue(p, out var sells))
+                sellQty = sells.Sum(o => o.Quantity);
+            Console.WriteLine("{0,-12} | {1,6:F2} | {2,7:F1} | {3,7:F1}", p, price, buyQty, sellQty);
+        }
+
+        Console.WriteLine("\nFactories status:");
+        Console.WriteLine("{0,-12} | {1,-9} | {2,8:F0} | {3,6:F1} | {4,7:F1} | {5,9:F1}", "Name", "State", "Credits", "Ore", "Energy", "IronIngot");
+        Console.WriteLine(new string('-', 12+1+9+1+8+1+6+1+7+1+9));
+        var allFactories = engine.Factories.Concat(engine.Consumers).ToList();
+        foreach (var f in allFactories)
+        {
+            Console.WriteLine("{0,-12} | {1,-9} | {2,8:F0} | {3,6:F1} | {4,7:F1} | {5,9:F1}",
+                f.Name, f.State, f.Credits,
+                f.InputInventory.GetAmount(ProductType.IronOre),
+                f.InputInventory.GetAmount(ProductType.Energy),
+                f.OutputInventory.GetAmount(ProductType.IronIngot));
+        }
 
         Console.WriteLine("\nSimulation complete.");
         Console.WriteLine($"Final tick: {engine.GlobalTick}");
