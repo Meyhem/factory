@@ -14,9 +14,9 @@ public class Factory
     public FactoryState State { get; private set; } = FactoryState.Idle;
     public Recipe? CurrentRecipe { get; set; }
     public int RemainingTicks { get; set; } = 0;
-    public Inventory InputInventory { get; } = new();
-    public Inventory OutputInventory { get; } = new();
-    public Inventory ProductionBuffer { get; } = new();
+    public Inventory InputInventory { get; set; } = new();
+    public Inventory OutputInventory { get; set; } = new();
+    public Inventory ProductionBuffer { get; set; } = new();
     public double Credits { get; set; } = 1000.0;
     public string Name { get; set; } = "Unnamed";
 

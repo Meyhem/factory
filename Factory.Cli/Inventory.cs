@@ -6,6 +6,17 @@ public class Inventory
 {
     public Dictionary<ProductType, double> Items { get; } = new();
 
+    public Inventory(IEnumerable<KeyValuePair<ProductType, double>>? initialItems = null)
+    {
+        if (initialItems != null)
+        {
+            foreach (var kvp in initialItems)
+            {
+                Add(kvp.Key, kvp.Value);
+            }
+        }
+    }
+
     public void Add(ProductType type, double quantity)
     {
         if (quantity <= 0) return;

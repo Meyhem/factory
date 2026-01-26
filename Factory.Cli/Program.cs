@@ -13,7 +13,7 @@ class Program
                 var ironRecipe = Recipes.IronSmelting();
 
         var ironFactory = new Factory { CurrentRecipe = ironRecipe, Name = "Iron Smelter", Credits = 5000 };
-        ironFactory.InputInventory.Add(ProductType.IronOre, 20.0);
+        ironFactory.InputInventory = new Inventory(new KeyValuePair<ProductType, double>[] { new(ProductType.IronOre, 20.0) });
         engine.AddFactory(ironFactory);
 
                 var energyRecipe = Recipes.EnergyProduction();
