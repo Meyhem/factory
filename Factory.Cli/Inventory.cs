@@ -9,7 +9,8 @@ public class Inventory
     public void Add(ProductType type, double quantity)
     {
         if (quantity <= 0) return;
-        Items[type] += quantity;
+        double current = GetAmount(type);
+        Items[type] = current + quantity;
     }
 
     public void Remove(ProductType type, double quantity)
