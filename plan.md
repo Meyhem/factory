@@ -1,103 +1,151 @@
-Phase 1: Environment Initialization
+System Overview: Mass-Centric Industrial Simulation
 
-    Directory Setup
+The objective is to develop a deterministic industrial automation engine where resource flow is governed by mass (g) rather than discrete units. This approach provides a granular simulation layer, allowing for recipes that produce by-products of varying densities and logistics systems that prioritize weight over item counts.
+Core Objectives
+
+    Precision: Use gram-based mass for all inventory and recipe operations.
+
+    Scalability: Decouple domain logic (Inventory, Recipes) from rendering (Excalibur Actors) to allow for headless simulation or future engine swaps.
+
+    Efficiency: Implement a reservation-based logistics system to prevent "mule swarming" and optimize pathfinding.
+
+Phase 1: Infrastructure & Environment Setup
+
+This phase establishes the build pipeline and project architecture.
+
+    Project Initialization:
     Bash
 
-    mkdir mining-game && cd mining-game
-    mkdir -p src/{core,actors,scenes,data,assets,systems}
+    mkdir industrial-sim && cd industrial-sim
     npm init -y
+    npm install excalibur
+    npm install -D parcel typescript @types/node
 
-    Dependency Installation
+    Directory Structure:
 
-        Core: npm install excalibur
+        src/core: Pure TypeScript logic (Mass, Inventory, Recipe).
 
-        Build: npm install -D parcel typescript @types/node
+        src/data: Static registries (Product types, Recipe definitions).
 
-    Configuration
+        /*actors: Excalibur Actor implementations.
 
-        tsconfig.json: Set target to ESNext, module to ESNext, and enable experimentalDecorators.
+        src/systems: Global managers (Logistics, Tick Manager).
 
-        package.json: Add scripts:
-        JSON
+    Build Configuration: * tsconfig.json: Target ESNext, moduleResolution: "node", experimentalDecorators: true.
 
-        "scripts": {
-          "start": "parcel index.html",
-          "build": "parcel build index.html"
-        }
+        package.json: "start": "parcel index.html".
 
-Phase 2: Project Structure
-1. /src/core (Domain Logic)
+Phase 2: Domain Logic (Mass & Inventory)
 
-Strictly TypeScript logic. No Excalibur dependencies.
+We are modeling resources as continuous mass values. The AmountOfProduct class is the primary data structure for transactions.
+2.1 AmountOfProduct
 
-    Product.ts: Product metadata (ID, mass-per-unit is replaced by mass-only logic).
-
-    Inventory.ts: Mass-based storage management.
-
-    Recipe.ts: Transformation logic (Massin​→Massout​).
-
-    LogisticsBroker.ts: Supply/Demand priority queue and reservation ledger.
-
-2. /src/actors (Excalibur Entities)
-
-Visual and interactive representations.
-
-    BaseUnit.ts: Extends ex.Actor. Common logic for autonomous units.
-
-    Mule.ts: Logistics unit implementation.
-
-    Factory.ts: Processor implementation.
-
-    Miner.ts: Specialized Factory for raw extraction.
-
-3. /src/data (Static Definitions)
-
-    Products.ts: Registry of all product IDs.
-
-    Recipes.ts: Registry of mass-to-mass conversion rules.
-
-4. /src/systems (ECS/Global Logic)
-
-    TickSystem.ts: Synchronizes game logic ticks across factories.
-
-    InputHandler.ts: Manages factory placement and selection.
-
-Phase 3: Initial Entry Point
-
-index.html
-HTML
-
-<!DOCTYPE html>
-<html>
-<head><title>Mining Game</title></head>
-<body>
-    <canvas id="game"></canvas>
-    <script src="./src/main.ts" type="module"></script>
-</body>
-</html>
-
-src/main.ts
+Stores the product identity and its associated mass.
 TypeScript
 
-import * as ex from 'excalibur';
+export class AmountOfProduct {
+  constructor(
+    public readonly productId: string,
+    public mass: number // in grams
+  ) {}
+}
 
-const game = new ex.Engine({
-  canvasElementId: 'game',
-  width: 800,
-  height: 600,
-  displayMode: ex.DisplayMode.FitScreen
-});
+2.2 Inventory Management
 
-game.start();
+The Inventory class handles storage constraints.
 
-Phase 4: Implementation Sequence
+    State: A Map<string, number> mapping productId to total grams stored.
 
-    Define AmountOfProduct: Create the container for productId and mass.
+    Logic: Every add operation must check if currentTotalMass + incomingMass <= maxMassCapacity.
 
-    Define Inventory: Implement add, remove, and transfer based solely on mass capacity.
+    Transfer Logic: inventoryA.transfer(inventoryB, productId, mass) ensures mass is never created or destroyed during transit.
 
-    Define LogisticsBroker: Implement the Task registry to prevent over-dispatching Mules.
+Phase 3: Recipe & Factory Logic
 
-    Implement Factory Logic: Process input mass to output mass over defined intervals.
+Factories are state machines that transform input mass into output mass over a period of discrete "ticks."
+3.1 Data Registries
 
-    Visual Layer: Connect Factory and Mule logic to Excalibur Actors.
+Define products and recipes in src/data/registry.ts.
+
+    Products: iron_ore, coal, water, slag, steel, steel_v_parts, steel_c_parts.
+
+    Recipe Example (Steel): * Inputs: iron_ore (1000g), coal (500g), water (200g).
+
+        Outputs: steel (800g), slag (200g).
+
+        Duration: 100 ticks.
+
+3.2 Factory Actor State Machine
+
+    Idle: Check if inputInventory contains required mass for the assigned recipe.
+
+    Consuming: Subtract input mass from inputInventory. Move to Processing state.
+
+    Processing: Increment tickCounter until it reaches recipe.durationTicks.
+
+    Producing: Check if outputInventory has mass capacity. If yes, add output mass and return to Idle.
+
+Phase 4: Logistics Broker (Supply & Demand)
+
+To prevent multiple Mules from servicing a single factory while others are ignored, we implement a Logistics Broker.
+4.1 The Task System
+
+The Broker maintains a list of TransportTasks.
+
+    Supply Task: Generated by Factories when outputInventory.totalMass > threshold.
+
+    Demand Task: Generated by Factories when inputInventory.totalMass < threshold.
+
+4.2 Reservation Logic
+
+To solve the "swarm" problem:
+
+    Each TransportTask has a massRequested and massReserved.
+
+    When a Mule accepts a task, it "reserves" its own carry capacity (e.g., 500g) in the massReserved field.
+
+    New Mules only accept tasks where massRequested - massReserved > MuleCapacity.
+
+Phase 5: Autonomous Units (Mule)
+
+Mules are the physical agents executing the Broker's tasks.
+
+    Base Unit: An ex.Actor with an Inventory.
+
+    Mule Behavior:
+
+        Tick 1: Request task from LogisticsBroker.
+
+        Tick 2: Pathfind to SourceFactory.
+
+        Tick 3: Transfer mass from SourceFactory.output to Mule.inventory.
+
+        Tick 4: Pathfind to DestinationFactory.
+
+        Tick 5: Transfer mass from Mule.inventory to DestinationFactory.input.
+
+        Tick 6: Clear task and return to Step 1.
+
+Phase 6: World & Mining
+
+    TileMap: Use ex.TileMap for the grid.
+
+    Miner Implementation: A specialized Factory that lacks input requirements.
+
+        Logic: Upon placement, the Miner reads the Tile metadata. If the tile contains iron_ore metadata, the Miner's recipe is set to produce iron_ore mass every N ticks.
+
+    Rendering: Each tile should visually represent its ore density.
+
+Phase 7: Implementation Sequence
+
+    Core Types: Implement AmountOfProduct and Inventory. Test mass constraints.
+
+    Data: Define the mass-based Recipe and Product registries.
+
+    Broker: Build the LogisticsBroker with the reservation system. This is the "brain."
+
+    Actors: Create Factory and Miner actors. Validate they produce/consume mass correctly.
+
+    Mule: Implement the Mule actor using Excalibur pathfinding to move mass between two static inventories.
+
+    Integration: Connect the LogisticsBroker to the Mule and Factory loop.
