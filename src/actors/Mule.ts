@@ -152,6 +152,12 @@ export class Mule extends Actor {
 
             // Step
             this.path.shift();
+
+            // Update Occupancy
+            const currentGridPos = grid.toGrid(this.pos);
+            grid.setOccupancy(currentGridPos, null); // Clear old
+            grid.setOccupancy(nextGridPos, this);    // Set new
+
             this.pos = grid.toWorld(nextGridPos);
         }
     }
