@@ -1,19 +1,36 @@
 
-import { Actor } from 'excalibur';
+import { Actor, Vector } from 'excalibur';
+import { GridSystem } from './GridSystem';
 
-export interface TransportTask {
-    id: string;
+export interface Box {
+    id: string; // Actor ID
+    productId: string;
+    amount: number;
+}
+
+export interface Demand {
+    consumerId: string;
+    productId: string;
+    amountNeeded: number;
+}
+
+export interface TransportJob {
     sourceId: string;
     targetId: string;
     productId: string;
-    massRequested: number;
-    massReserved: number;
+    amount: number;
 }
 
 export class LogisticsBroker {
     private static instance: LogisticsBroker;
-    private tasks: Map<string, TransportTask> = new Map();
-    private nextTaskId: number = 0;
+
+    // Suppliers: Map<Product, ActorIDs[]>
+    private suppliers: Map<string, Set<string>> = new Map();
+
+    // Demands: Map<Product, Demand[]>
+    // Or just a list of demands? Keyed by consumer?
+    // Let's store list of demands per product for easier matching
+    private demands: Map<string, Demand[]> = new Map();
 
     private constructor() { }
 
@@ -24,68 +41,111 @@ export class LogisticsBroker {
         return LogisticsBroker.instance;
     }
 
-    public requestTransport(sourceId: string, targetId: string, productId: string, mass: number): string {
-        const id = `task-${this.nextTaskId++}`;
-        const task: TransportTask = {
-            id,
-            sourceId,
-            targetId,
-            productId,
-            massRequested: mass,
-            massReserved: 0
-        };
-        this.tasks.set(id, task);
-        console.log(`[Broker] Created task ${id}: Move ${mass}g of ${productId} from ${sourceId} to ${targetId}`);
-        return id;
+    public registerSupplier(actorId: string, productId: string) {
+        if (!this.suppliers.has(productId)) {
+            this.suppliers.set(productId, new Set());
+        }
+        this.suppliers.get(productId)?.add(actorId);
+        // console.log(`[Broker] Registered supplier ${actorId} for ${productId}`);
     }
 
-    public getAvailableTask(capacity: number): TransportTask | null {
-        // Find a task where we can contribute
-        // Simple FIFO or priority logic
-        for (const task of this.tasks.values()) {
-            const remainingNeeded = task.massRequested - task.massReserved;
-            if (remainingNeeded > 0) { // Any contribution helps, or enforce >= capacity?
-                // Logic: if remaining needed is very small, maybe ignore if < min_carry?
-                // For now, take anything.
-                return task;
+    public postDemand(consumerId: string, productId: string, amount: number) {
+        if (amount <= 0) return;
+
+        if (!this.demands.has(productId)) {
+            this.demands.set(productId, []);
+        }
+
+        const productDemands = this.demands.get(productId)!;
+
+        // Update existing demand or add new
+        const existing = productDemands.find(d => d.consumerId === consumerId);
+        if (existing) {
+            existing.amountNeeded = amount;
+        } else {
+            productDemands.push({
+                consumerId,
+                productId,
+                amountNeeded: amount
+            });
+            console.log(`[Broker] New demand from ${consumerId}: ${amount}g of ${productId}`);
+        }
+    }
+
+    public clearDemand(consumerId: string, productId: string) {
+        const productDemands = this.demands.get(productId);
+        if (productDemands) {
+            const idx = productDemands.findIndex(d => d.consumerId === consumerId);
+            if (idx >= 0) {
+                productDemands.splice(idx, 1);
+                // console.log(`[Broker] Cleared demand for ${consumerId} (${productId})`);
             }
         }
-        return null;
     }
 
-    public reserveCapacity(taskId: string, amount: number): boolean {
-        const task = this.tasks.get(taskId);
-        if (!task) return false;
+    // Find the best job for a Mule at specific position with capacity
+    // Cost = (Dist Mule to Source) + (Dist Source to Target)
+    public getBestTransportJob(mulePos: Vector, capacity: number, engine: any): TransportJob | null {
+        let bestJob: TransportJob | null = null;
+        let bestScore = Infinity;
 
-        const remaining = task.massRequested - task.massReserved;
-        const reserved = Math.min(remaining, amount);
+        const grid = GridSystem.getInstance();
+        const muleGrid = grid.toGrid(mulePos);
 
-        if (reserved <= 0) return false;
+        // Iterate over all products that have demands
+        for (const [productId, demands] of this.demands.entries()) {
+            if (demands.length === 0) continue;
 
-        task.massReserved += reserved;
-        console.log(`[Broker] Reserved ${reserved}g on task ${taskId}. Progress: ${task.massReserved}/${task.massRequested}`);
-        return true;
-    }
+            // Check if we have suppliers for this product
+            const suppliers = this.suppliers.get(productId);
+            if (!suppliers || suppliers.size === 0) continue;
 
-    public completeTaskChunk(taskId: string, amount: number) {
-        // In a real system we might deduct from requested or just verify delivery
-        // simplified: if reserved == requested and all delivered, remove task.
-        // For now, we keep tasks until explicitly cleared or we can deduct massRequested?
-        // Better: Factories cancel/complete tasks when satisfied.
-        // But let's assume the broker manages lifecycle for now.
+            for (const demand of demands) {
+                // Determine target actor (Consumer)
+                // We need actual Actor object positions for distance.
+                // Assuming we can pass Engine or check Scene to find actors?
+                // For MVP, lets assume we can look them up via EntityManager if passed, 
+                // OR we trust the ID is valid and look it up globally?
+                // Excalibur doesn't have a global "getById" without the scene.
+                // WE PASSED `engine: any` for now.
 
-        const task = this.tasks.get(taskId);
-        if (!task) return;
+                const targetActor = engine.currentScene.world.entityManager.getByName(demand.consumerId)[0] as Actor;
+                if (!targetActor) continue;
 
-        // Re-eval if we need to decrement anything. 
-        // If the task is "move 1000g", and we moved 500g, do we lower requested?
-        // Usually "requested" is the goal. "reserved" tracks promises. "delivered" tracks reality.
+                // For each supplier
+                for (const supplyId of suppliers) {
+                    const sourceActor = engine.currentScene.world.entityManager.getByName(supplyId)[0] as Actor;
+                    if (!sourceActor) continue;
 
-        // Let's rely on the Factory to cancel the task if its input is full, 
-        // or the Sender to cancel if empty.
-    }
+                    // Must verify Source actually HAS the product Right Now? 
+                    // Or assume it produces it?
+                    // Ideally we check inventory. But `Supplier` registration implies capability.
+                    // Let's assume capability for now. We can add availability check later (check Inventory mass > 0).
+                    // Ideally: `if (sourceActor.outputInventory.getAmount(productId) < 10) continue;`
+                    // Accessing `.outputInventory` requires casting to Factory/Miner.
 
-    public removeTask(taskId: string) {
-        this.tasks.delete(taskId);
+                    const sourceGrid = grid.toGrid(sourceActor.pos);
+                    const targetGrid = grid.toGrid(targetActor.pos);
+
+                    // Distances (Manhattan)
+                    const distMuleToSource = Math.abs(sourceGrid.x - muleGrid.x) + Math.abs(sourceGrid.y - muleGrid.y);
+                    const distSourceToTarget = Math.abs(targetGrid.x - sourceGrid.x) + Math.abs(targetGrid.y - sourceGrid.y);
+
+                    const score = distMuleToSource + distSourceToTarget;
+
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestJob = {
+                            sourceId: supplyId,
+                            targetId: demand.consumerId,
+                            productId: productId,
+                            amount: Math.min(capacity, demand.amountNeeded) // Planned amount
+                        };
+                    }
+                }
+            }
+        }
+
+        return bestJob;
     }
 }

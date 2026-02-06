@@ -1,7 +1,9 @@
 
 import { Engine, Color } from 'excalibur';
+import { GridSystem } from '../systems/GridSystem';
 import { Factory, FactoryState } from './Factory';
 import { PRODUCTS, Recipe } from '../data/registry';
+import { LogisticsBroker } from '../systems/LogisticsBroker';
 import { AmountOfProduct } from '../core/AmountOfProduct';
 
 export class Miner extends Factory {
@@ -24,7 +26,13 @@ export class Miner extends Factory {
     }
 
     onInitialize(engine: Engine) {
-        super.onInitialize(engine);
-        // In real implementation, check tilemap here to set resourceType
+        // Snap to grid
+        const grid = GridSystem.getInstance();
+        grid.snapToGrid(this);
+        grid.setOccupancy(grid.toGrid(this.pos), this);
+
+        // Register Supply
+        const broker = LogisticsBroker.getInstance();
+        broker.registerSupplier(this.name, this.resourceType);
     }
 }

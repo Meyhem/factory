@@ -1,8 +1,9 @@
 
 import { Actor, Engine, Vector, Color, Text, Font, FontUnit, vec } from 'excalibur';
 import { Inventory } from '../core/Inventory';
-import { LogisticsBroker, TransportTask } from '../systems/LogisticsBroker';
+import { LogisticsBroker, TransportJob } from '../systems/LogisticsBroker';
 import { Factory } from './Factory';
+import { GridSystem } from '../systems/GridSystem';
 
 export enum MuleState {
     IDLE = 'idle',
@@ -17,9 +18,11 @@ export class Mule extends Actor {
     public capacitor: number = 0; // future energy?
 
     private currentState: MuleState = MuleState.IDLE;
-    private currentTask: TransportTask | null = null;
+    private currentJob: TransportJob | null = null;
     private targetActor: Actor | null = null;
-    private speed: number = 100; // pixels per sec
+    private moveTimer: number = 0;
+    private moveInterval: number = 200; // ms per tile
+    private path: Vector[] = [];
     private debugText: Text;
 
     constructor(name: string, capacity: number) {
@@ -45,15 +48,10 @@ export class Mule extends Actor {
         this.debugText.text = `${this.name}\n${this.currentState}\nInv: ${this.inventory.currentTotalMass}g`;
     }
 
-    // Override graphics drawing to keep it simple, OR just use onPostDraw to draw text
-    onPostDraw(ctx: CanvasRenderingContext2D, elapsed: number) {
-        // Manual draw if needed, but let's try the Graphics way first.
-        // Actually, assigning `this.graphics.use(this.debugText)` would hide the rectangle.
-        // Let's use a child actor for text if we want to keep the rectangle, OR just draw in onPostDraw.
-    }
-
     onInitialize(engine: Engine) {
-        // setup visual
+        // Snap to grid
+        const grid = GridSystem.getInstance();
+        grid.snapToGrid(this);
     }
 
     update(engine: Engine, delta: number) {
@@ -61,16 +59,14 @@ export class Mule extends Actor {
 
         switch (this.currentState) {
             case MuleState.IDLE:
-                this.findTask();
+                this.findJob(engine);
                 break;
             case MuleState.MOVING_TO_SOURCE:
-                this.moveToTarget(delta);
+            case MuleState.MOVING_TO_TARGET:
+                this.handleMovement(delta);
                 break;
             case MuleState.LOADING:
                 this.handleLoading();
-                break;
-            case MuleState.MOVING_TO_TARGET:
-                this.moveToTarget(delta);
                 break;
             case MuleState.UNLOADING:
                 this.handleUnloading();
@@ -78,87 +74,150 @@ export class Mule extends Actor {
         }
     }
 
-    private findTask() {
-        // Ask broker
-        const broker = LogisticsBroker.getInstance();
-        const task = broker.getAvailableTask(this.inventory.maxMassCapacity); // Passing cap as hint
-        if (task) {
-            // Reserve capacity
-            if (broker.reserveCapacity(task.id, this.inventory.maxMassCapacity)) {
-                this.currentTask = task;
-                // Find source actor (In real game, we need a Scene or EntityManager to find Actor by ID)
-                // For now, assuming we can find it via a global registry or passed in engine?
-                // Hack: We need a global actor registry.
-                this.targetActor = this.scene?.world.entityManager.getByName(task.sourceId)[0] as Actor;
+    private handleMovement(delta: number) {
+        this.moveTimer += delta;
+        if (this.moveTimer < this.moveInterval) return;
+        this.moveTimer = 0;
 
-                if (this.targetActor) {
-                    this.currentState = MuleState.MOVING_TO_SOURCE;
-                    console.log(`[Mule ${this.name}] Accepted task ${task.id}. Going to ${task.sourceId}`);
+        const grid = GridSystem.getInstance();
+
+        // 1. Check Arrival First (Pre-emptive)
+        if (this.targetActor) {
+            const targetGrid = grid.toGrid(this.targetActor.pos);
+            const myGrid = grid.toGrid(this.pos);
+
+            const neighbors = grid.getNeighbors(myGrid);
+            const isNeighbor = neighbors.some(n => n.equals(targetGrid));
+            const isOnTarget = myGrid.equals(targetGrid);
+
+            if (isNeighbor || isOnTarget) {
+                // Arrived
+                if (this.currentState === MuleState.MOVING_TO_SOURCE) {
+                    this.currentState = MuleState.LOADING;
                 } else {
-                    console.error(`[Mule] Could not find actor ${task.sourceId}`);
-                    this.currentTask = null; // abort
+                    this.currentState = MuleState.UNLOADING;
                 }
+                this.path = []; // Clear path
+                return;
             }
+        }
+
+        // 2. Pathfind if empty
+        if (this.path.length === 0) {
+            if (!this.targetActor) return;
+
+            const targetGrid = grid.toGrid(this.targetActor.pos);
+            const myGrid = grid.toGrid(this.pos);
+
+            const newPath = grid.findPath(myGrid, targetGrid);
+            if (newPath && newPath.length > 1) {
+                // Remove start node
+                newPath.shift();
+                this.path = newPath;
+            } else {
+                // Determine if we are failing because target is unreachable or just blocked?
+                // Log only occasionally?
+                return;
+            }
+        }
+
+        // 3. Move
+        if (this.path.length > 0) {
+            const nextGridPos = this.path[0];
+
+            // Special Check: If next step is the Target itself, and we are not 'isOnTarget' (checked above),
+            // then we are Neighbor (checked above?).
+            // If we reached here, 'isNeighbor' is False.
+            // So 'nextGridPos' cannot be 'targetGrid' unless we are diagonal? 
+            // Neighbors logic handles NESW. 
+            // If path expects diagonal? No, grid neighbors are NESW.
+
+            // If nextGridPos is occupied, we must wait.
+            // UNLESS it is the target?
+            // If it is the target, we should have triggered 'isNeighbor'.
+            // So if we are here, nextGridPos is NOT target (or isNeighbor failed).
+            // But if pathfinder included target as last step, and we are 1 step away...
+            // isNeighbor should be true.
+
+            // Edge Case: Diagonals?
+            // GridSystem.getNeighbors is up/down/left/right.
+            // findPath uses getNeighbors.
+            // so path is orthogonal.
+            // So if we are adjacent, we are Neighbors.
+
+            if (grid.isOccupied(nextGridPos)) {
+                // Blocked by something else?
+                return;
+            }
+
+            // Step
+            this.path.shift();
+            this.pos = grid.toWorld(nextGridPos);
         }
     }
 
-    private moveToTarget(delta: number) {
-        if (!this.targetActor) return;
+    private findJob(engine: Engine) {
+        // Ask broker for best job
+        const broker = LogisticsBroker.getInstance();
+        const job = broker.getBestTransportJob(this.pos, this.inventory.maxMassCapacity, engine);
 
-        const distance = this.pos.distance(this.targetActor.pos);
-        if (distance < 5) {
-            // Arrived
-            if (this.currentState === MuleState.MOVING_TO_SOURCE) {
-                this.currentState = MuleState.LOADING;
+        if (job) {
+            this.currentJob = job;
+            this.targetActor = engine.currentScene.world.entityManager.getByName(job.sourceId)[0] as Actor;
+
+            if (this.targetActor) {
+                this.currentState = MuleState.MOVING_TO_SOURCE;
+                this.path = [];
+                console.log(`[Mule ${this.name}] Accepted Job: ${job.amount}g ${job.productId} from ${job.sourceId} -> ${job.targetId}`);
             } else {
-                this.currentState = MuleState.UNLOADING;
+                console.error(`[Mule] Computed job source invalid: ${job.sourceId}`);
+                this.currentJob = null;
             }
-        } else {
-            // Move
-            const dir = this.targetActor.pos.sub(this.pos).normalize();
-            this.pos = this.pos.add(dir.scale(this.speed * delta / 1000));
         }
     }
 
     private handleLoading() {
-        if (!this.currentTask || !this.targetActor) {
+        if (!this.currentJob || !this.targetActor) {
             this.currentState = MuleState.IDLE;
             return;
         }
 
         const sourceFactory = this.targetActor as Factory;
-        // Transfer from source output to mule inventory
-        // We know productId from task
-        // In real sim, we might take as much as reserved or available.
 
-        // Check how much is there
-        const available = sourceFactory.outputInventory.getAmount(this.currentTask.productId);
-        const toTake = Math.min(available, this.inventory.remainingCapacity);
+        const available = sourceFactory.outputInventory.getAmount(this.currentJob.productId);
+        const toTake = Math.min(available, this.inventory.remainingCapacity, this.currentJob.amount);
+
+        // If 0, we still proceed? Or abort?
+        // If we load 0, we carry 0 to target. Useful?
+        // If source has 0, maybe we waited too long?
+        // Let's proceed, maybe next time better.
 
         if (toTake > 0) {
-            sourceFactory.outputInventory.transfer(this.inventory, this.currentTask.productId, toTake);
-            console.log(`[Mule] Loaded ${toTake}g of ${this.currentTask.productId}`);
+            sourceFactory.outputInventory.transfer(this.inventory, this.currentJob.productId, toTake);
+            console.log(`[Mule] Loaded ${toTake}g of ${this.currentJob.productId}`);
+        } else {
+            // console.log(`[Mule] Loaded 0g.`);
         }
 
         // Proceed to target
-        // Find target actor
-        this.targetActor = this.scene?.world.entityManager.getByName(this.currentTask.targetId)[0] as Actor;
+        this.targetActor = this.scene?.world.entityManager.getByName(this.currentJob.targetId)[0] as Actor;
         if (this.targetActor) {
             this.currentState = MuleState.MOVING_TO_TARGET;
+            this.path = [];
         } else {
             console.error("Target missing");
-            this.currentState = MuleState.IDLE; // stuck
+            this.currentState = MuleState.IDLE;
         }
     }
 
     private handleUnloading() {
-        if (!this.currentTask || !this.targetActor) {
+        if (!this.currentJob || !this.targetActor) {
             this.currentState = MuleState.IDLE;
             return;
         }
 
         const targetFactory = this.targetActor as Factory;
-        const productId = this.currentTask.productId;
+        const productId = this.currentJob.productId;
         const amount = this.inventory.getAmount(productId);
 
         if (amount > 0) {
@@ -167,7 +226,8 @@ export class Mule extends Actor {
         }
 
         this.currentState = MuleState.IDLE;
-        this.currentTask = null;
+        this.currentJob = null;
         this.targetActor = null;
+        this.path = [];
     }
 }
