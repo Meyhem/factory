@@ -131,7 +131,12 @@ export class LogisticsBroker {
                     const distMuleToSource = Math.abs(sourceGrid.x - muleGrid.x) + Math.abs(sourceGrid.y - muleGrid.y);
                     const distSourceToTarget = Math.abs(targetGrid.x - sourceGrid.x) + Math.abs(targetGrid.y - sourceGrid.y);
 
-                    const score = distMuleToSource + distSourceToTarget;
+                    const distance = distMuleToSource + distSourceToTarget;
+
+                    // Heuristic: Distance - (Demand * 0.1)
+                    // This favors higher demand tasks when distances are similar.
+                    // 1000g demand reduces score by 100 "distance units".
+                    const score = distance - (demand.amountNeeded * 0.1);
 
                     if (score < bestScore) {
                         bestScore = score;

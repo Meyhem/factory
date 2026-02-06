@@ -22,12 +22,11 @@ export const RECIPES: Record<string, Recipe> = {
     STEEL_PRODUCTION: {
         id: 'steel_production',
         inputs: [
-            new AmountOfProduct(PRODUCTS.IRON_ORE, 1000),
-            new AmountOfProduct(PRODUCTS.COAL, 500),
-            new AmountOfProduct(PRODUCTS.WATER, 200),
+            new AmountOfProduct(PRODUCTS.IRON_ORE, 100),
+            new AmountOfProduct(PRODUCTS.COAL, 50)
         ],
         outputs: [
-            new AmountOfProduct(PRODUCTS.STEEL, 800),
+            new AmountOfProduct(PRODUCTS.STEEL, 100),
             new AmountOfProduct(PRODUCTS.SLAG, 200),
         ],
         durationTicks: 100,
