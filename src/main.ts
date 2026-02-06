@@ -39,7 +39,8 @@ game.start().then(() => {
     // 4. Create Mules
     for (let i = 0; i < 3; i++) {
         const mule = new Mule(`Mule_${i}`, 200); // 200g capacity
-        mule.pos.setTo(400, 300);
+        // Spawn at different rows to avoid overlap
+        mule.pos.setTo(400, 300 + (i * 32));
         game.add(mule);
     }
 
@@ -56,17 +57,7 @@ game.start().then(() => {
     // I'll leave Factory as is and add a System or Timer to tick them.
 
     game.on('postupdate', () => {
-        // Tick all factories/miners
-        ironMine.tick();
-        coalMine.tick();
-        steelMill.tick();
-
-        // Creating Demand/Supply tasks?
-        // Factories should do this in their tick/update.
-        // Missing logic: Factory needs to ASK for inputs and OFFER outputs.
-
-        // I need to update Factory.ts to interact with Broker.
-        // Doing it here for MVP speed if possible, or modifying Factory.ts?
-        // Modifying Factory.ts is better.
+        // Tick moved to internal update loop
+        // Just monitoring here if needed
     });
 });
