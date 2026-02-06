@@ -36,7 +36,13 @@ export class Mule extends Actor {
 
         this.debugText = new Text({
             text: '',
-            font: new Font({ size: 10, unit: FontUnit.Px, family: 'monospace', color: Color.White })
+            font: new Font({
+                size: 10,
+                unit: FontUnit.Px,
+                family: 'monospace',
+                color: Color.White,
+                shadow: { blur: 1, offset: vec(1, 1), color: Color.Black }
+            })
         });
 
         const labelActor = new Actor({ pos: vec(0, -20) });
