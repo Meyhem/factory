@@ -59,4 +59,10 @@ export class Inventory {
     getAmount(productId: string): number {
         return this.storage.get(productId) || 0;
     }
+
+    toString(): string {
+        return Array.from(this.storage.entries())
+            .map(([id, amount]) => `${id}:${amount}`)
+            .join(', ');
+    }
 }

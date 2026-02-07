@@ -46,7 +46,7 @@ export class Factory extends Actor {
     }
 
     onPostUpdate(engine: Engine, delta: number) {
-        this.debugText.text = `${this.name}\nIn: ${this.inputInventory.currentTotalMass}g\nOut: ${this.outputInventory.currentTotalMass}g\n${this.currentState}`;
+        this.debugText.text = `${this.name}\nState: ${this.currentState}\nIn: ${this.inputInventory.toString()}\nOut: ${this.outputInventory.toString()}`;
     }
 
     onInitialize(engine: Engine) {
